@@ -43,6 +43,9 @@ type argContainer struct {
 	extpass, badname, passfile []string
 	// For reverse mode, several ways to specify exclusions. All can be specified multiple times.
 	exclude, excludeWildcard, excludeFrom []string
+	// EH:
+	// Allowed binaries for access restriction, specified via the "-restrict_access" flag. This is a list of absolute paths.
+	restrict_access string
 	// Configuration file name override
 	config             string
 	notifypid, scryptn int
@@ -59,6 +62,8 @@ type argContainer struct {
 	_forceOwner *fuse.Owner
 	// _explicitScryptn is true then the user passed "-scryptn=xyz"
 	_explicitScryptn bool
+	// _allowedPaths is a list of absolute paths that are allowed to access the filesystem when the "-restrict_access" flag is set. This is a security feature that can be used to prevent data leaks via untrusted binaries.
+	allowedPaths []string
 }
 
 var flagSet *flag.FlagSet
@@ -213,6 +218,7 @@ func parseCliOpts(osArgs []string) (args argContainer) {
 	flagSet.StringVar(&args.trace, "trace", "", "Write execution trace to file")
 	flagSet.StringVar(&args.fido2, "fido2", "", "Protect the masterkey using a FIDO2 token instead of a password")
 	flagSet.StringVar(&args.context, "context", "", "Set SELinux context (see mount(8) for details)")
+	flagSet.StringVar(&args.restrict_access, "restrict_access", "", "Restrict access to the filesystem to the specified comma-separated list of absolute paths. This is a security feature that can be used to prevent data leaks via untrusted binaries.")
 	flagSet.StringArrayVar(&args.fido2_assert_options, "fido2-assert-option", nil, "Options to be passed with `fido2-assert -t`")
 
 	// Exclusion options

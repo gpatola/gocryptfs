@@ -53,4 +53,6 @@ type Args struct {
 	DeterministicNames bool
 	// NoXattr disables extended attribute operations
 	NoXattr bool
+	// allowpath is a list of absolute paths that are allowed to access the filesystem when the "-restrict_access" flag is set. This is a security feature that can be used to prevent data leaks via untrusted binaries.
+	AllowedPaths []string
 }

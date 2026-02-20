@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"bufio"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 
@@ -123,7 +124,30 @@ func changePassword(args *argContainer) {
 	tlog.Info.Println(tlog.ColorGreen + "Password changed." + tlog.ColorReset)
 }
 
-func main() {
+// EH:
+// readAllowedPaths reads the allowed path list from the file specified in "-restrict_access" and returns it as a slice of strings.
+func readAllowedPaths(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var allowedPaths []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			allowedPaths = append(allowedPaths, line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return allowedPaths, nil
+}
+
+func main(){
 	mxp := runtime.GOMAXPROCS(0)
 	if mxp < 4 && os.Getenv("GOMAXPROCS") == "" {
 		// On a 2-core machine, setting maxprocs to 4 gives 10% better performance.
@@ -205,6 +229,32 @@ func main() {
 			os.Exit(exitcodes.ExcludeError)
 		}
 	}
+	
+	// EH:
+	// "-restric_access"
+	// Allow only certain binaries to access the filesystem.
+	// This is a security feature that can be used to prevent data leaks via untrusted binaries.
+	if args.restrict_access != "" {
+		var allowedPaths []string
+		if runtime.GOOS == "windows" {
+			tlog.Fatal.Printf("-restrict_access is not supported on Windows")
+			os.Exit(exitcodes.Usage)
+		}
+		//read the allowed path list from the file specified in "-restrict_access"
+		allowedPaths, err := readAllowedPaths(args.restrict_access)
+		if err != nil {
+			tlog.Fatal.Printf("Error reading allowed path list: %v", err)
+			os.Exit(exitcodes.RestrictAccess)
+		}
+		println("Allowed paths:")
+		for _, path := range allowedPaths {
+			println(path)
+		}
+		// pass the allowed path list to fusefrontend via args
+		args.allowedPaths = allowedPaths
+		println("Allowed paths loaded from file: %s", &args.allowedPaths)
+	}
+
 	// "-config"
 	if args.config != "" {
 		args.config, err = filepath.Abs(args.config)

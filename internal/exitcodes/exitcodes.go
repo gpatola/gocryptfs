@@ -72,6 +72,8 @@ const (
 	DevNull = 30
 	// FIDO2Error - an error was encountered while interacting with a FIDO2 token
 	FIDO2Error = 31
+	// RestrictAccess means that an error was encountered while processing the "-restrict_access" flag, such as an error reading the allowed path list or an invalid path in the list.
+	RestrictAccess = 32
 )
 
 // Err wraps an error with an associated numeric exit code

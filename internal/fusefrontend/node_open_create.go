@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"syscall"
+	"fmt"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -37,6 +38,12 @@ func mangleOpenCreateFlags(flags uint32) (newFlags int) {
 	return newFlags
 }
 
+
+func binaryPathFromPID(pid uint32) (string, error) {
+    exe := fmt.Sprintf("/proc/%d/exe", pid)
+    return os.Readlink(exe)
+}
+
 // Open - FUSE call. Open already-existing file.
 //
 // Symlink-safe through Openat().
@@ -46,6 +53,34 @@ func (n *Node) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFl
 		return
 	}
 	defer syscall.Close(dirfd)
+
+	// Greg:
+	ctx2 := toFuseCtx(ctx)
+	tlog.Debug.Printf("PID:  %d", ctx2.Pid)
+
+	path, err := binaryPathFromPID(ctx2.Pid)
+		if err == nil {
+		tlog.Debug.Printf("Path:  %s", path)
+	}
+
+	// Check if path is in the allowed list
+	if n.rootNode().args.AllowedPaths != nil {
+		found := false
+		for _, allowedPath := range n.rootNode().args.AllowedPaths {
+			tlog.Debug.Printf("Checking Allowed Path:  %s", allowedPath)
+			if path == allowedPath {
+				found = true
+				break
+			}
+		}
+		if !found {
+			tlog.Debug.Printf("Open: executable path %q is not in allowed paths", path)
+			errno = syscall.EACCES
+			return
+		}
+	} else {
+		tlog.Debug.Printf("No allowed paths configured: %s", n.rootNode().args)
+	}
 
 	rn := n.rootNode()
 	newFlags := mangleOpenCreateFlags(flags)
