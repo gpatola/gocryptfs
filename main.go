@@ -229,7 +229,7 @@ func main(){
 			os.Exit(exitcodes.ExcludeError)
 		}
 	}
-	
+
 	// EH:
 	// "-restric_access"
 	// Allow only certain binaries to access the filesystem.

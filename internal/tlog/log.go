@@ -171,6 +171,8 @@ func SwitchLoggerToSyslog() {
 // PrintMasterkeyReminder reminds the user that he should store the master key in
 // a safe place.
 func PrintMasterkeyReminder(key []byte) {
+	// EH:
+	return
 	if !Info.Enabled {
 		// Quiet mode
 		return

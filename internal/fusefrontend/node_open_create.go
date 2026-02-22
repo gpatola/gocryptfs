@@ -38,11 +38,32 @@ func mangleOpenCreateFlags(flags uint32) (newFlags int) {
 	return newFlags
 }
 
-
+// EH:
 func binaryPathFromPID(pid uint32) (string, error) {
     exe := fmt.Sprintf("/proc/%d/exe", pid)
     return os.Readlink(exe)
 }
+
+// EH:
+func checkAccessAllowed(ctx context.Context, allowedPaths []string) (bool, error) {
+	ctx2 := toFuseCtx(ctx)
+	tlog.Debug.Printf("PID:  %d", ctx2.Pid)
+
+	path, err := binaryPathFromPID(ctx2.Pid)
+	if err != nil {
+		return false, err
+	}
+	tlog.Debug.Printf("Path:  %s", path)
+
+	for _, allowedPath := range allowedPaths {
+		tlog.Debug.Printf("Checking Allowed Path:  %s", allowedPath)
+		if path == allowedPath {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+	
 
 // Open - FUSE call. Open already-existing file.
 //
@@ -54,33 +75,17 @@ func (n *Node) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFl
 	}
 	defer syscall.Close(dirfd)
 
-	// Greg:
-	ctx2 := toFuseCtx(ctx)
-	tlog.Debug.Printf("PID:  %d", ctx2.Pid)
-
-	path, err := binaryPathFromPID(ctx2.Pid)
-		if err == nil {
-		tlog.Debug.Printf("Path:  %s", path)
-	}
-
-	// Check if path is in the allowed list
-	if n.rootNode().args.AllowedPaths != nil {
-		found := false
-		for _, allowedPath := range n.rootNode().args.AllowedPaths {
-			tlog.Debug.Printf("Checking Allowed Path:  %s", allowedPath)
-			if path == allowedPath {
-				found = true
-				break
-			}
+	// EH:
+	// Check if access is allowed for the process trying to open the file
+	if allowed, err := checkAccessAllowed(ctx, n.rootNode().args.AllowedPaths); !allowed {
+		if err != nil {
+			tlog.Debug.Printf("Open: error checking access for PID %d: %v", toFuseCtx(ctx).Pid, err)
+		} else {
+			tlog.Debug.Printf("Open: access denied for PID %d", toFuseCtx(ctx).Pid)
 		}
-		if !found {
-			tlog.Debug.Printf("Open: executable path %q is not in allowed paths", path)
-			errno = syscall.EACCES
-			return
-		}
-	} else {
-		tlog.Debug.Printf("No allowed paths configured: %s", n.rootNode().args)
-	}
+		errno = syscall.EACCES
+		return
+	}	
 
 	rn := n.rootNode()
 	newFlags := mangleOpenCreateFlags(flags)
@@ -123,6 +128,18 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 		return
 	}
 	defer syscall.Close(dirfd)
+
+	// EH:
+	// Check if the process is allowed to create files based on its executable path
+	if allowed, err := checkAccessAllowed(ctx, n.rootNode().args.AllowedPaths); !allowed {
+		if err != nil {
+			tlog.Debug.Printf("Open: error checking access for PID %d: %v", toFuseCtx(ctx).Pid, err)
+		} else {
+			tlog.Debug.Printf("Open: access denied for PID %d", toFuseCtx(ctx).Pid)
+		}
+		errno = syscall.EACCES
+		return
+	}	
 
 	var err error
 	fd := -1
